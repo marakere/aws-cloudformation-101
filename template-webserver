@@ -1,0 +1,86 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "EC2 Instance for a LAMP Stack",
+	"Parameters": {
+		"VPC": {
+			"Description": "The default VPC",
+			"Type": "AWS::EC2::VPC::Id"
+		},
+		"Subnets": {
+			"Description": "At least two public subnets from default VPC.",
+			"Type": "List<AWS::EC2::Subnet::Id>"
+		}
+	},
+	"Mappings": {
+		"RegionMap": {
+			"us-east-1": {
+				"AMI": "ami-97785bed"
+			}
+		}
+	},
+	"Resources": {
+		"EC2Instance": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"ImageId": {
+					"Fn::FindInMap": ["RegionMap", {
+						"Ref": "AWS::Region"
+					}, "AMI"]
+				},
+				"InstanceType": "t2.nano",
+				"NetworkInterfaces": [{
+					"AssociatePublicIpAddress": "true",
+					"DeviceIndex": "0",
+					"GroupSet": [{
+						"Ref": "WebserverSecurityGroup"
+					}],
+					"SubnetId": {
+						"Fn::Select": ["0", {
+							"Ref": "Subnets"
+						}]
+					}
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": "simple-webserver"
+				}],
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": ["", [
+							"#!/bin/bash -ex\n",
+							"sudo yum update -y\n",
+							"sudo yum install -y httpd24 php70 mysql56-server php70-mysqlnd\n",
+							"sudo service httpd start\n",
+							"sudo chkconfig httpd on\n"
+						]]
+					}
+				}
+			}
+		},
+		"WebserverSecurityGroup": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "simple-wordpress-webserver",
+				"VpcId": {
+					"Ref": "VPC"
+				},
+				"SecurityGroupIngress": [{
+					"CidrIp": "0.0.0.0/0",
+					"FromPort": 80,
+					"IpProtocol": "tcp",
+					"ToPort": 80
+				}]
+			}
+		}
+	},
+	"Outputs": {
+		"WordpressURL": {
+			"Description": "The URL of the webserver.",
+			"Value": {
+				"Fn::Join": ["", ["http://", {
+					"Fn::GetAtt": ["EC2Instance", "PublicIp"]
+				}]]
+			}
+		}
+	}
+}
